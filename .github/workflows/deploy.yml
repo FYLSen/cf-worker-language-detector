@@ -1,0 +1,47 @@
+name: Deploy Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  repository_dispatch:
+  workflow_dispatch:
+
+jobs:
+
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Generate wrangler.toml
+      run: |
+        cat << EOF > wrangler.toml
+        name = "language-detector"
+        main = "index.ts"
+        compatibility_date = "2024-11-04"
+        workers_dev = true
+        routes = [{ pattern = "${{ secrets.API_URL }}/lang*", zone_id = "${{ secrets.CLOUDFLARE_ZONE_ID }}" }]
+        [vars]
+        AI_MODEL = "${{ secrets.AI_MODEL }}"
+        [[d1_databases]]
+        binding = "DB"
+        database_name = "${{ secrets.D1_DATABASE_NAME }}"
+        database_id = "${{ secrets.D1_DATABASE_ID }}"
+        [ai]
+        binding = "AI"
+        [observability]
+        enabled = true
+        head_sampling_rate = 1
+        [placement]
+        mode = "smart"
+        EOF
+
+    - name: Deploy to Cloudflare Workers
+      uses: cloudflare/wrangler-action@v3
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        command: deploy --var VERSION:${{ github.sha }}
